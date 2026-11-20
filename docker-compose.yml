@@ -1,0 +1,48 @@
+# Project 3: High-Throughput WireGuard VPN Gateway
+# Author: Muhammadqodir Davlatyorov
+# Safe for shared hosting environments (HestiaCP / cPanel friendly)
+
+services:
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:15
+    container_name: wg-easy
+    restart: unless-stopped
+    ports:
+      # WireGuard data plane (UDP tunnel)
+      - "${WG_PORT:-51820}:51820/udp"
+      # Web Admin UI: bound to loopback only for security
+      # (SSH port forward: ssh -L 51821:127.0.0.1:51821 root@<server_ip>)
+      - "127.0.0.1:${WG_UI_PORT:-51821}:51821/tcp"
+    volumes:
+      - ./wg:/etc/wireguard
+      - /lib/modules:/lib/modules:ro
+    environment:
+      - PORT=51821
+      - HOST=0.0.0.0
+      - INSECURE=true
+      - DISABLE_IPV6=${DISABLE_IPV6:-true}
+      - INIT_ENABLED=${INIT_ENABLED:-true}
+      - INIT_USERNAME=${INIT_USERNAME:-admin}
+      - INIT_PASSWORD=${INIT_PASSWORD:-}
+      - INIT_HOST=${INIT_HOST:-79.132.143.211}
+      - INIT_PORT=${WG_PORT:-51820}
+      - INIT_DNS=${WG_DNS:-1.1.1.1, 9.9.9.9}
+      - INIT_IPV4_CIDR=${WG_SUBNET:-10.8.0.0/24}
+      - INIT_ALLOWED_IPS=${WG_ALLOWED_IPS:-0.0.0.0/0}
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,11 @@
+# Sensitive Environment Configuration & Keys
+.env
+wg/
+*.conf
+!*.example.conf
+
+# System & Runtime Logs
+*.log
+*.tmp
+*.bak
+.DS_Store
