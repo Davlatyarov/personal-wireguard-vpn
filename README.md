@@ -7,6 +7,8 @@
 
 A production-ready, hardened **Personal WireGuard VPN Gateway** with automated client provisioning (`wg-easy`) and loopback admin management. Engineered for zero-trust traffic tunneling, low-latency encryption, and complete isolation on shared Linux servers (compatible alongside HestiaCP, Nginx, Apache, and MySQL).
 
+Integrated with **Project 2: Personal Secure Gateway** via an isolated Docker bridge network (`gateway`: `172.28.0.0/24`) for automated threat sinkholing and ad-blocking over VPN.
+
 Developed by **Muhammadqodir Davlatyorov** (BSc Cybersecurity Student at International Digital University / University of Wolverhampton programme).
 
 ---
@@ -20,23 +22,27 @@ Developed by **Muhammadqodir Davlatyorov** (BSc Cybersecurity Student at Interna
                      | UDP Port 51820
                      v
 +-------------------------------------------------------------------------------+
-| Linux VPS Host (79.132.143.211)                                               |
+| Linux VPS Host (<SERVER_IP>)                                                  |
 |                                                                               |
 |   +-----------------------------------------------------------------------+   |
 |   | Linux Kernel WireGuard Subsystem                                      |   |
-|   |  - in-kernel fast cryptographic processing                            |   |
-|   |  - Zero user-space context switching overhead (<3% loss)              |   |
+|   |  - In-kernel fast cryptographic processing (ChaCha20-Poly1305)         |   |
+|   |  - Zero user-space context switching overhead (<3% cryptographic loss) |   |
 |   +-----------------------------------------------------------------------+   |
 |                                   |                                           |
 |   +-----------------------------------------------------------------------+   |
-|   | wg-easy Container (Isolated Network & Memory Cap: 256MB)              |   |
+|   | wg-easy Container (Static IP: 172.28.0.20 on 'gateway' bridge)        |   |
 |   |  - UDP 51820 -> WireGuard Data Plane                                  |   |
 |   |  - TCP 127.0.0.1:51821 -> Admin UI (Loopback ONLY, Zero Public Web)  |   |
 |   |  - Automated QR-code generation & profile distribution                |   |
 |   +-----------------------------------------------------------------------+   |
-|                                   |                                           |
-|                                   v                                           |
-|   [ Internet Gateway (Public IP: 79.132.143.211 | Masked Client Origin) ]     |
+|            |                                           |                      |
+|            | [Internal DNS Query]                      | [Internet Traffic]   |
+|            v                                           v                      |
+|   +-----------------------------------+   +-------------------------------+   |
+|   | AdGuard Home (172.28.0.10:53)     |   | NAT Masquerade (Public IP)    |   |
+|   | - 1.1M Rules / Anti-Gambling Sink |   | - Masked ISP Client Identity  |   |
+|   +-----------------------------------+   +-------------------------------+   |
 +-------------------------------------------------------------------------------+
 ```
 
@@ -54,16 +60,20 @@ Developed by **Muhammadqodir Davlatyorov** (BSc Cybersecurity Student at Interna
    * **Zero public web exposure:** immune to automated web scanners, credential stuffing, and unauthenticated exploits.
    * Accessed securely over an encrypted SSH port tunnel:
      ```bash
-     ssh -L 51821:127.0.0.1:51821 root@<server_ip>
+     ssh -L 51821:127.0.0.1:51821 root@<SERVER_IP>
      ```
 
-3. **Shared Host Non-Invasive Isolation:**
+3. **Inter-Container Gateway Routing:**
+   * Communicates directly with AdGuard Home over the internal Docker network `gateway` (`172.28.0.10:53`).
+   * Ad-blocking, tracking protection, and betting sinkholing work out-of-the-box inside the VPN tunnel without exposing plain port 53 to the public internet.
+
+4. **Shared Host Non-Invasive Isolation:**
    * Operates completely independently of shared hosting stacks (HestiaCP, cPanel).
    * Web ports (`80`, `443`), database (`3306`), and DNS (`53`, `853`) remain untouched.
 
-4. **Full Tunnel Protection (0.0.0.0/0, ::/0):**
-   * Forces all device traffic (DNS queries, TCP streams, UDP packets) through the encrypted tunnel.
-   * Masks client ISP identity and prevents local network eavesdropping.
+5. **Full Tunnel Protection (0.0.0.0/0, ::/0):**
+   * Forces all device traffic through the encrypted tunnel.
+   * Masks client ISP identity and prevents local network eavesdropping on public Wi-Fi.
 
 ---
 
@@ -91,7 +101,7 @@ chmod +x deploy.sh verify.sh
 ### Step 1: Open SSH Tunnel on Your Laptop
 Run the following in your local terminal:
 ```bash
-ssh -L 51821:127.0.0.1:51821 root@79.132.143.211
+ssh -L 51821:127.0.0.1:51821 root@<SERVER_IP>
 ```
 
 ### Step 2: Access Management Dashboard
@@ -99,7 +109,7 @@ Open your laptop browser at:
 ```text
 http://localhost:51821
 ```
-* Log in with username `admin` and the password generated during `./deploy.sh` (or found in `.env`).
+* Log in with username `admin` and the password generated during `./deploy.sh` (found in `.env`).
 
 ### Step 3: Connect Devices
 * **Mobile (Android / iPhone):**
@@ -117,7 +127,7 @@ http://localhost:51821
 
 ```
 personal-wireguard-vpn/
-├── docker-compose.yml     # Hardened WireGuard container manifest
+├── docker-compose.yml     # Hardened WireGuard container manifest (gateway network)
 ├── deploy.sh              # Automated deployment & secret provisioning script
 ├── verify.sh              # Health check and port diagnostic utility
 ├── .env.example           # Secure configuration template

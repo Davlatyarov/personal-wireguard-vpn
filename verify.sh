@@ -13,6 +13,7 @@ warn() { printf '\033[33m  [WARN]\033[0m %s\n' "$*"; }
 [ -f .env ] && { set -a; . ./.env; set +a; }
 WG_PORT="${WG_PORT:-51820}"
 WG_UI_PORT="${WG_UI_PORT:-51821}"
+ADGUARD_IP="${WG_DNS:-172.28.0.10}"
 
 echo "== 1. Container Status =="
 if [ "$(docker inspect -f '{{.State.Running}}' wg-easy 2>/dev/null)" = "true" ]; then
@@ -50,5 +51,13 @@ else
 fi
 
 echo ""
-echo "== 5. Resource Consumption =="
+echo "== 5. AdGuard Home DNS Connectivity (${ADGUARD_IP}) =="
+if docker exec wg-easy ping -c 1 -W 2 "${ADGUARD_IP}" >/dev/null 2>&1; then
+  pass "AdGuard Home (${ADGUARD_IP}) is reachable over gateway network"
+else
+  warn "AdGuard Home (${ADGUARD_IP}) not reached yet (is personal-secure-gateway running?)"
+fi
+
+echo ""
+echo "== 6. Resource Consumption =="
 docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" wg-easy

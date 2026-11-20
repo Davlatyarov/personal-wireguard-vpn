@@ -21,15 +21,24 @@ echo -e "${BLUE}======================================================${NC}"
 command -v docker >/dev/null || { echo -e "${RED}[ERROR] docker is not installed${NC}"; exit 1; }
 docker compose version >/dev/null 2>&1 || { echo -e "${RED}[ERROR] docker compose v2 plugin missing${NC}"; exit 1; }
 
+# Detect Server Public IP
+SERVER_IP=$(curl -s -4 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
+
 # Initialize .env with auto-generated secure password if missing
 if [ ! -f .env ]; then
   if [ -f .env.example ]; then
     echo -e "${YELLOW}[*] Generating secure .env configuration...${NC}"
     cp .env.example .env
-    SERVER_IP=$(curl -s -4 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
-    RANDOM_PASS=$(tr -dc A-Za-z0-9_!@#$% 2>/dev/null < /dev/urandom | head -c 24 || echo "SafePass$(date +%s)")
-    sed -i "s/INIT_PASSWORD=/INIT_PASSWORD=${RANDOM_PASS}/" .env
-    sed -i "s/INIT_HOST=79.132.143.211/INIT_HOST=${SERVER_IP}/" .env
+    
+    # Safe password generation without SIGPIPE pipefail traps
+    if command -v python3 >/dev/null 2>&1; then
+      RANDOM_PASS=$(python3 -c "import secrets; print(secrets.token_urlsafe(18))")
+    else
+      RANDOM_PASS=$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9_!@#' | head -c 20 || echo "WireGuardSecurePass$(date +%s)")
+    fi
+
+    sed -i "s|INIT_PASSWORD=|INIT_PASSWORD=${RANDOM_PASS}|" .env
+    sed -i "s|INIT_HOST=<SERVER_IP>|INIT_HOST=${SERVER_IP}|" .env
     echo -e "${GREEN}[+] Generated Web UI admin password: ${YELLOW}${RANDOM_PASS}${NC}"
   else
     echo -e "${RED}[ERROR] .env.example template is missing!${NC}"
@@ -46,6 +55,12 @@ WG_UI_PORT="${WG_UI_PORT:-51821}"
 mkdir -p wg
 chmod 700 wg
 
+# Ensure shared bridge network exists
+if ! docker network inspect gateway >/dev/null 2>&1; then
+  echo -e "${BLUE}[*] Creating shared bridge network 'gateway' (172.28.0.0/24)...${NC}"
+  docker network create --subnet=172.28.0.0/24 gateway
+fi
+
 # Enable IP forwarding in kernel
 if [ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)" != "1" ]; then
   echo -e "${BLUE}[*] Enabling net.ipv4.ip_forward in Linux kernel...${NC}"
@@ -56,14 +71,13 @@ echo -e "${BLUE}[*] Pulling and starting WireGuard container...${NC}"
 docker compose pull
 docker compose up -d
 
-SERVER_IP=$(curl -s -4 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
-
 echo ""
 echo -e "${GREEN}======================================================${NC}"
 echo -e "${GREEN} [SUCCESS] WireGuard VPN Gateway is active!           ${NC}"
 echo -e "${GREEN}======================================================${NC}"
 echo -e "WireGuard UDP  : ${GREEN}${WG_PORT}/UDP${NC} (open to internet)"
 echo -e "Web Management : ${YELLOW}127.0.0.1:${WG_UI_PORT}${NC} (loopback only)"
+echo -e "DNS Upstream   : ${BLUE}${WG_DNS}${NC} (AdGuard Home)"
 echo -e ""
 echo -e "How to connect from laptop & scan QR code for phone:"
 echo -e "  1. On laptop, open SSH tunnel:"

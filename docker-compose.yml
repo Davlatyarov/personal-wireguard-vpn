@@ -2,11 +2,19 @@
 # Author: Muhammadqodir Davlatyorov
 # Safe for shared hosting environments (HestiaCP / cPanel friendly)
 
+networks:
+  gateway:
+    name: gateway
+    external: true
+
 services:
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:15
     container_name: wg-easy
     restart: unless-stopped
+    networks:
+      gateway:
+        ipv4_address: ${WG_IP:-172.28.0.20}
     ports:
       # WireGuard data plane (UDP tunnel)
       - "${WG_PORT:-51820}:51820/udp"
@@ -24,9 +32,9 @@ services:
       - INIT_ENABLED=${INIT_ENABLED:-true}
       - INIT_USERNAME=${INIT_USERNAME:-admin}
       - INIT_PASSWORD=${INIT_PASSWORD:-}
-      - INIT_HOST=${INIT_HOST:-79.132.143.211}
+      - INIT_HOST=${INIT_HOST:-}
       - INIT_PORT=${WG_PORT:-51820}
-      - INIT_DNS=${WG_DNS:-1.1.1.1, 9.9.9.9}
+      - INIT_DNS=${WG_DNS:-172.28.0.10}
       - INIT_IPV4_CIDR=${WG_SUBNET:-10.8.0.0/24}
       - INIT_ALLOWED_IPS=${WG_ALLOWED_IPS:-0.0.0.0/0}
     cap_add:
